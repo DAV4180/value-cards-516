@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>5/16 職場前導 - 價值導航互動系統</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    
+    <style>
+        :root {
+            --primary: #2c3e50; --accent: #e67e22; --bg: #f4f7f6;
+            --card-bg: #ffffff; --heart-full: #e74c3c; --admin: #27ae60;
+        }
+        body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; background: var(--bg); margin: 0; padding-bottom: 90px; -webkit-tap-highlight-color: transparent; }
+        
+        /* 進入權控遮罩 */
+        #access-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; padding: 20px; text-align: center; }
+        .access-input { padding: 12px; border-radius: 10px; border: none; width: 220px; margin-bottom: 20px; font-size: 1.1rem; text-align: center; }
+
+        header { background: white; padding: 1rem; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .header-top { display: flex; justify-content: space-between; align-items: center; max-width: 1000px; margin: 0 auto; }
+        .nav-tabs { display: flex; overflow-x: auto; gap: 8px; max-width: 1000px; margin: 10px auto 0; padding: 5px 0; scrollbar-width: none; }
+        .nav-tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { white-space: nowrap; padding: 8px 18px; border-radius: 20px; border: 1px solid #eee; background: #f9f9f9; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; transition: 0.3s; font-weight: 500; }
+        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        #admin-panel { display: none; background: #eef9f1; padding: 15px; border-radius: 12px; max-width: 1000px; margin: 10px auto; border: 1px dashed var(--admin); font-size: 0.9rem; }
+
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; padding: 20px; max-width: 1000px; margin: 0 auto; }
+        .value-card { background: white; padding: 18px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); position: relative; border: 2px solid transparent; min-height: 110px; display: flex; flex-direction: column; justify-content: space-between; }
+        .value-card.selected { border-color: var(--heart-full); background: #fffcfb; }
+        .value-title { font-weight: bold; font-size: 1.05rem; color: var(--primary); cursor: pointer; line-height: 1.3; }
+        .del-btn { position: absolute; top: -8px; right: -8px; background: #ff4757; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: none; }
+        
+        .rank-card { padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee; transition: background 0.5s; background: white; }
+        .rank-count { font-weight: bold; font-size: 1.1rem; color: var(--primary); }
+
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 20px; width: 85%; max-width: 450px; overflow-y: auto; max-height: 80vh; }
+        input, textarea, select { width: 100%; margin-top: 10px; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; padding: 15px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.08); display: flex; justify-content: center; gap: 8px; z-index: 1000; }
+        .main-btn { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 25px; font-weight: bold; cursor: pointer; font-size: 0.85rem; }
+        
+        footer { font-size: 0.7rem; color: #999; text-align: center; padding: 20px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+<div id="access-overlay">
+    <h2 style="margin-bottom:10px;">5/16 價值導航座談會</h2>
+    <p style="margin-bottom:30px; opacity:0.8;">請輸入活動參與代碼</p>
+    <input type="password" id="access-input" class="access-input" placeholder="代碼">
+    <button onclick="checkAccess()" class="main-btn" style="padding: 12px 40px; font-size: 1rem;">進入探索</button>
+</div>
+
+<div id="app-content" style="display:none;">
+    <header>
+        <div class="header-top">
+            <h2 style="margin:0; color:var(--primary); font-size: 1.2rem;" onclick="adminLogin()">職場價值導航</h2>
+            <span id="sync-status" style="font-size:0.7rem; color:#999;">● 雲端連線中</span>
+        </div>
+        <div id="admin-panel">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="color:var(--admin)">管理員模式</strong>
+                <button onclick="exitAdmin()" style="border:none; background:none; color:#666; cursor:pointer;">退出</button>
+            </div>
+            <div style="margin-top:10px; display:flex; gap:8px;">
+                <button onclick="openAddModal()" style="background:var(--admin); color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">＋ 新增</button>
+                <button onclick="exportData()" style="background:#3498db; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">💾 導出</button>
+                <button onclick="resetStats()" style="background:#ff4757; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">🔄 重置熱度</button>
+            </div>
+        </div>
+        <div class="nav-tabs" id="browse-nav">
+            <button class="tab-btn active" onclick="filterCat('全部')">全部</button>
+            <button class="tab-btn" onclick="filterCat('人際關係')">人際關係</button>
+            <button class="tab-btn" onclick="filterCat('美德價值')">美德價值</button>
+            <button class="tab-btn" onclick="filterCat('自我與生活')">自我與生活</button>
+            <button class="tab-btn" onclick="filterCat('工作追求')">工作追求</button>
+        </div>
+    </header>
+
+    <main id="view-main" class="grid-container"></main>
+
+    <section id="view-leaderboard" style="display:none; padding:20px; max-width:800px; margin: 0 auto;">
+        <h3>🔥 全場熱度即時排行</h3>
+        <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">顏色越深代表全場越重視這項價值 (僅顯示有票數之卡牌)</p>
+        <div id="leaderboard-list"></div>
+    </section>
+
+    <section id="view-fav" style="display:none; padding:20px; max-width:800px; margin: 0 auto;">
+        <h3>我的最愛清單</h3>
+        <div id="fav-list"></div>
+        <p style="text-align:center; color:#7f8c8d; margin-top:30px; font-size:0.9rem;">請自行截圖保留你的選擇</p>
+    </section>
+
+    <footer>
+        本系統僅限於 5/16 Gospel 座談活動使用。<br>
+        教材內容版權屬「職游創新職涯發展與諮詢」所有。
+    </footer>
+</div>
+
+<div id="card-modal" class="modal">
+    <div class="modal-content">
+        <h3 id="modal-header">卡牌資訊</h3>
+        <div id="view-mode">
+            <h2 id="view-title" style="margin-top:0; color:var(--primary);"></h2>
+            <div id="view-cat" style="color:var(--accent); font-weight:bold; margin-bottom:10px; font-size:0.9rem;"></div>
+            <p id="view-desc" style="line-height:1.6; color:#34495e;"></p>
+        </div>
+        <div id="edit-mode" style="display:none;">
+            <select id="edit-cat">
+                <option value="人際關係">人際關係</option>
+                <option value="美德價值">美德價值</option>
+                <option value="自我與生活">自我與生活</option>
+                <option value="工作追求">工作追求</option>
+            </select>
+            <input type="text" id="edit-title" placeholder="標題">
+            <textarea id="edit-desc" rows="5" placeholder="描述"></textarea>
+            <button onclick="saveCardData()" style="background:var(--admin); color:white; border:none; width:100%; padding:12px; border-radius:10px; margin-top:15px; cursor:pointer;">保存更新</button>
+        </div>
+        <button class="tab-btn" style="width:100%; margin-top:15px;" onclick="closeModal()">關閉</button>
+    </div>
+</div>
+
+<div class="bottom-nav">
+    <button class="main-btn" onclick="switchView('main')">挑選卡牌</button>
+    <button class="main-btn" style="background:#e74c3c" onclick="switchView('leaderboard')">大家選什麼</button>
+    <button class="main-btn" style="background:var(--primary)" onclick="switchView('fav')">我的收藏(<span id="fav-count">0</span>)</button>
+</div>
+
+<script>
+    // 1. Firebase 初始化
+    const firebaseConfig = { databaseURL: "https://valuecards516-default-rtdb.firebaseio.com/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 2. 完整資料庫
+    const defaultData = [
+        { id: 101, cat: '人際關係', title: '交友廣闊', desc: '建立豐富且多樣的人脈網絡，與各行各業的人連結。' },
+        { id: 102, cat: '人際關係', title: '愛與被愛', desc: '在關係中感受溫暖，擁有付出愛與接收愛的連結。' },
+        { id: 103, cat: '人際關係', title: '歸屬與認同', desc: '屬於某個特定身分或團體，感受到被接納與支持。' },
+        { id: 104, cat: '人際關係', title: '能彼此尊重', desc: '互動中保有界限與敬意，承認彼此的獨立性與獨特價值。' },
+        { id: 105, cat: '人際關係', title: '獲得父母的認同', desc: '感受到父母的支持與肯定，建立健康的家庭心理連結。' },
+        { id: 106, cat: '人際關係', title: '有一個安穩的家', desc: '擁有一個能讓你感到完全安全、放鬆與棲息的居所。' },
+        { id: 107, cat: '人際關係', title: '深刻友誼', desc: '擁有能交流內心深處想法，在關鍵時刻彼此支持的摯友。' },
+        { id: 108, cat: '人際關係', title: '人際和諧', desc: '追求環境中的衝突極小化，維持圓融平穩的相處氣氛。' },
+        { id: 109, cat: '人際關係', title: '有小孩', desc: '養育下一代，在生命傳承與親職互動中獲得意義與快樂。' },
+        { id: 110, cat: '人際關係', title: '能好好照顧家人', desc: '有能力與心力為家庭成員提供實質與心理上的照護。' },
+        { id: 201, cat: '美德價值', title: '忠誠', desc: '對特定對象、信念或組織保持堅定的信守與忠心。' },
+        { id: 202, cat: '美德價值', title: '國家主權/民族意識', desc: '重視集體的身分認同，對土地與民族的尊嚴有強烈使命感。' },
+        { id: 203, cat: '美德價值', title: '不欺騙 不說謊', desc: '追求絕對的誠實，讓言語與事實始終保持一致。' },
+        { id: 204, cat: '美德價值', title: '不要傷害別人', desc: '將「不損人」作為最高的行為準則，謹慎行使個人力量。' },
+        { id: 205, cat: '美德價值', title: '知恩圖報', desc: '銘記他人的幫助，並在有能力時予以實質的回饋。' },
+        { id: 206, cat: '美德價值', title: '真誠一致', desc: '追求外在行為與內在價值觀的統一，不戴面具生活。' },
+        { id: 207, cat: '美德價值', title: '全人類的福祉', desc: '超越個人利益，關心整體社會或全人類的進步與痛苦。' },
+        { id: 208, cat: '美德價值', title: '尊重傳統延續歷史', desc: '守護前人留下的規範與智慧，重視文化與血脈的傳承。' },
+        { id: 209, cat: '美德價值', title: '公平正義', desc: '追求權力與資源的合理分配，堅持對正確事物的原則。' },
+        { id: 210, cat: '美德價值', title: '保護環境/動植物', desc: '重視自然界的永續，願意為非人類的生命群體發聲與努力。' },
+        { id: 211, cat: '美德價值', title: '社會公益/關懷弱勢', desc: '將目光投向邊緣與弱勢群體，致力於改善他們的處境。' },
+        { id: 301, cat: '自我與生活', title: '享受休閒娛樂', desc: '重視生活品質，追求美食、旅遊與各種舒壓的樂趣。' },
+        { id: 302, cat: '自我與生活', title: '有趣的人事物', desc: '拒絕無聊，將「新鮮感」與「好奇心」作為生活的動力。' },
+        { id: 303, cat: '自我與生活', title: '忠於自我', desc: '不為社會期待而活，全然擁抱並展現自己的真實本性。' },
+        { id: 304, cat: '自我與生活', title: '自由自在不受拘束', desc: '追求身體與心靈的寬廣，不受任何教條或框架的限制。' },
+        { id: 305, cat: '自我與生活', title: '內在的平靜', desc: '在紛擾的世界中，追求靈魂深處的安穩、定力與寧靜。' },
+        { id: 306, cat: '自我與生活', title: '洞察智慧', desc: '渴望看穿生命與人性的真相，擁有透徹的分析力。' },
+        { id: 307, cat: '自我與生活', title: '保持潔淨', desc: '追求身體、環境乃至心靈的一塵不染與純淨感。' },
+        { id: 308, cat: '自我與生活', title: '健康的身體與心靈', desc: '將身心平衡視為一切的基礎，致力於維持最佳健康狀態。' },
+        { id: 309, cat: '自我與生活', title: '保有隱私不受打擾', desc: '擁有不被外界窺視與干擾的個人私密空間。' },
+        { id: 310, cat: '自我與生活', title: '追求真理與知性', desc: '對知識有強烈渴望，在理性的探索與思考中獲得滿足。' },
+        { id: 311, cat: '自我與生活', title: '自我肯定 喜歡自己', desc: '建立堅實的自尊，認同自己的獨特性並感到自信。' },
+        { id: 312, cat: '自我與生活', title: '自我表達與呈現', desc: '渴望透過文字、創作或表現，讓世界看到真實的自己。' },
+        { id: 313, cat: '自我與生活', title: '舒適的環境', desc: '重視居住與場所的氛圍，追求美感、便利與舒適。' },
+        { id: 314, cat: '自我與生活', title: '信仰與靈性生活', desc: '與神性或更高層次的力量連結，讓生命有終極依託。' },
+        { id: 315, cat: '自我與生活', title: '平凡的生活', desc: '拒絕過度競爭，追求平實、簡單且踏實的每一天。' },
+        { id: 316, cat: '自我與生活', title: '能親近大自然', desc: '從山川草木中汲取能量，與自然環境保持連結。' },
+        { id: 317, cat: '自我與生活', title: '規律的生活', desc: '透過紀律與節奏，讓生活各個環節穩定且可控。' },
+        { id: 318, cat: '自我與生活', title: '有獨處的空間', desc: '能享受安靜，在完全的孤獨中獲得充電與反思。' },
+        { id: 319, cat: '自我與生活', title: '低調不張揚', desc: '不追求成為焦點，享受安靜、內斂且平穩的狀態。' },
+        { id: 401, cat: '工作追求', title: '有夥伴一起打拼', desc: '重視團隊革命情感，喜歡與戰友併肩作戰的感覺。' },
+        { id: 402, cat: '工作追求', title: '幫助他人成長', desc: '將成就感建立在「協助他人解決問題與進步」之上。' },
+        { id: 403, cat: '工作追求', title: '對社會有影響力', desc: '工作成果能實質改變他人的觀點或生活，帶來正向變革。' },
+        { id: 404, cat: '工作追求', title: '勇於承擔責任', desc: '享受被託付重任，對工作結果負起完全的責任與領導。' },
+        { id: 405, cat: '工作追求', title: '資產與金錢', desc: '獲得豐厚的經濟報酬，累積可支配的物質財富。' },
+        { id: 406, cat: '工作追求', title: '晉升的機會與速度', desc: '在組織架構中快速發展，追求職等與權限的向上突破。' },
+        { id: 407, cat: '工作追求', title: '擁有自己的事業', desc: '渴望打造屬於自己的品牌、團隊，不滿足於受僱。' },
+        { id: 408, cat: '工作追求', title: '權威與特定地位', desc: '擁有被賦予的職權地位，在該領域中具備話語權。' },
+        { id: 409, cat: '工作追求', title: '社會認可/受尊重', desc: '職業本身帶有高度名望，受社會大眾與同僚的景仰。' },
+        { id: 410, cat: '工作追求', title: '有效率有效能', desc: '追求以最少投入產出最大價值，極度重視做事章法。' },
+        { id: 411, cat: '工作追求', title: '領導團隊', desc: '享受運籌帷幄、資源調度與引導他人達成願景。' },
+        { id: 412, cat: '工作追求', title: '務實重視可行性', desc: '不愛空談，只在意技術面是否能落地執行與達成目標。' },
+        { id: 413, cat: '工作追求', title: '能被看見 有舞台', desc: '渴望獲得關注與肯定，在工作中獲得掌聲與目光。' },
+        { id: 414, cat: '工作追求', title: '清楚的流程規範', desc: '在有明確標準、有條理的環境下工作，效率最高。' },
+        { id: 415, cat: '工作追求', title: '隨遇而安 順勢而為', desc: '不強求結果，順應大環境的趨勢與機運靈活變通。' },
+        { id: 416, cat: '工作追求', title: '工作穩定性', desc: '低風險環境，不需要擔心裁員或收入變動的壓力。' },
+        { id: 417, cat: '工作追求', title: '工作生活平衡', desc: '工作絕不能犧牲陪伴家人與個人興趣的個人時間。' },
+        { id: 418, cat: '工作追求', title: '發揮天賦能力', desc: '工作內容與你的天性契合，做起來毫不費力且充滿熱情。' },
+        { id: 419, cat: '工作追求', title: '美感與藝術', desc: '追求工作產出的精緻與美學，對品質有藝術家的執著。' },
+        { id: 420, cat: '工作追求', title: '專業', desc: '在特定的技術或知識領域追求頂尖，成為備受肯定的行家。' },
+        { id: 421, cat: '工作追求', title: '創新與創造', desc: '打破舊有框架，創造全新的產品、服務或解決方案。' },
+        { id: 422, cat: '工作追求', title: '追求工作品質', desc: '追求卓越，對於產出的「細膩度」勝過對「數量」的追求。' },
+        { id: 423, cat: '工作追求', title: '獨立自主', desc: '不需頻繁呈現進度或與人協商，能全權決定工作模式。' },
+        { id: 424, cat: '工作追求', title: '邏輯清晰', desc: '在高度理性的架構下處理問題，追求流程的邏輯與因果。' },
+        { id: 425, cat: '工作追求', title: '持續自我成長', desc: '工作是學習的延伸，每一天都能感受到技能或視野的進化。' },
+        { id: 426, cat: '工作追求', title: '安全感/可掌控', desc: '進度是可預測的，降低工作環境中的變數與心理壓力。' },
+        { id: 427, cat: '工作追求', title: '冒險挑戰', desc: '熱愛高風險環境，從不確定的危機中尋找突破與刺激感。' },
+        { id: 428, cat: '工作追求', title: '明確目標或方向', desc: '不愛模糊空間，只要告訴你終點在哪，你就有無限衝勁。' },
+        { id: 429, cat: '工作追求', title: '有成就感', desc: '任務完成時，能感受到強大的內在滿足與自我實現感。' },
+        { id: 430, cat: '工作追求', title: '穩定秩序的環境', desc: '置身於紀律良好的組織，一切按規矩進行，不愛突發狀況。' }
+    ];
+
+    let cards = JSON.parse(localStorage.getItem('cards_516_full')) || defaultData;
+    let favorites = new Set(JSON.parse(localStorage.getItem('myFavs_516')) || []);
+    let globalStats = {};
+    let currentCat = '全部';
+    let isAdmin = false;
+    let editingId = null;
+
+    // 通訊邏輯
+    function checkAccess() {
+        if(document.getElementById('access-input').value === "0516go") {
+            document.getElementById('access-overlay').style.display = 'none';
+            document.getElementById('app-content').style.display = 'block';
+            renderCards();
+        } else {
+            alert("代碼不正確");
+        }
+    }
+
+    db.ref('stats').on('value', (s) => {
+        globalStats = s.val() || {};
+        updateLeaderboardUI();
+    });
+
+    function renderCards() {
+        const grid = document.getElementById('view-main');
+        grid.innerHTML = '';
+        const filtered = currentCat === '全部' ? cards : cards.filter(c => c.cat === currentCat);
+
+        filtered.forEach(c => {
+            const isFav = favorites.has(c.id);
+            const div = document.createElement('div');
+            div.className = `value-card ${isFav ? 'selected' : ''}`;
+            div.innerHTML = `
+                <button class="del-btn" style="display:${isAdmin ? 'block' : 'none'}" onclick="deleteCard(${c.id})">×</button>
+                <div class="value-title" onclick="openCard(${c.id})">${c.title}</div>
+                <div style="font-size:0.6rem; color:#999; margin-top:5px;">${c.cat}</div>
+                <div style="text-align:right">
+                    <button style="background:none; border:none; font-size:1.4rem; cursor:pointer;" onclick="toggleFav(${c.id})">
+                        ${isFav ? '❤️' : '♡'}
+                    </button>
+                </div>
+            `;
+            grid.appendChild(div);
+        });
+        document.getElementById('fav-count').innerText = favorites.size;
+    }
+
+    function toggleFav(id) {
+        const isAdding = !favorites.has(id);
+        if (isAdding) favorites.add(id); else favorites.delete(id);
+        localStorage.setItem('myFavs_516', JSON.stringify([...favorites]));
+        db.ref('stats/' + id).transaction(c => (c || 0) + (isAdding ? 1 : -1));
+        renderCards();
+        if(document.getElementById('view-fav').style.display === 'block') renderFavList();
+    }
+
+    // 視圖切換 (Bug 修復重點)
+    function switchView(v) {
+        document.getElementById('view-main').style.display = v === 'main' ? 'grid' : 'none';
+        document.getElementById('view-leaderboard').style.display = v === 'leaderboard' ? 'block' : 'none';
+        document.getElementById('view-fav').style.display = v === 'fav' ? 'block' : 'none';
+        document.getElementById('browse-nav').style.display = v === 'main' ? 'flex' : 'none';
+        
+        if(v === 'fav') renderFavList();
+        if(v === 'leaderboard') updateLeaderboardUI();
+        if(v === 'main') renderCards();
+    }
+
+    function renderFavList() {
+        const list = document.getElementById('fav-list');
+        list.innerHTML = '';
+        const items = cards.filter(c => favorites.has(c.id));
+        if(items.length === 0) list.innerHTML = '<p style="text-align:center; color:#999; margin-top:50px;">尚未收藏</p>';
+        items.forEach(c => {
+            const div = document.createElement('div');
+            div.className = 'rank-card'; div.style.background = 'white';
+            div.innerHTML = `<div><strong>${c.title}</strong><br><small>${c.cat}</small></div>
+                             <button style="border:none; background:none; cursor:pointer;" onclick="toggleFav(${c.id})">❤️</button>`;
+            list.appendChild(div);
+        });
+    }
+
+    function updateLeaderboardUI() {
+        const list = document.getElementById('leaderboard-list');
+        if(!list) return;
+        list.innerHTML = '';
+        const sorted = [...cards].sort((a, b) => (globalStats[b.id] || 0) - (globalStats[a.id] || 0));
+        
+        sorted.forEach(c => {
+            const count = globalStats[c.id] || 0;
+            if (count <= 0) return;
+            const item = document.createElement('div');
+            item.className = 'rank-card';
+            item.style.backgroundColor = getHeatColor(count);
+            item.innerHTML = `<div><strong>${c.title}</strong><br><small>${c.cat}</small></div>
+                             <div class="rank-count">${count} <span style="font-size:0.8rem">票</span></div>`;
+            list.appendChild(item);
+        });
+    }
+
+    function getHeatColor(count) {
+        if (!count || count <= 0) return '#ffffff';
+        const i = Math.min(count / 12, 1);
+        return `rgb(${255 - (255 - 231) * i}, ${255 - (255 - 76) * i}, ${255 - (255 - 60) * i})`;
+    }
+
+    // 管理員與彈窗邏輯
+    function adminLogin() {
+        if(prompt("密碼") === "admin516") { isAdmin = true; document.getElementById('admin-panel').style.display = 'block'; renderCards(); }
+    }
+    function exitAdmin() { isAdmin = false; document.getElementById('admin-panel').style.display = 'none'; renderCards(); }
+    function openCard(id) {
+        const c = cards.find(x => x.id === id);
+        editingId = id;
+        if(isAdmin) {
+            document.getElementById('modal-header').innerText = "編輯模式";
+            document.getElementById('view-mode').style.display = 'none';
+            document.getElementById('edit-mode').style.display = 'block';
+            document.getElementById('edit-cat').value = c.cat;
+            document.getElementById('edit-title').value = c.title;
+            document.getElementById('edit-desc').value = c.desc;
+        } else {
+            document.getElementById('modal-header').innerText = "定義詳情";
+            document.getElementById('view-mode').style.display = 'block';
+            document.getElementById('edit-mode').style.display = 'none';
+            document.getElementById('view-title').innerText = c.title;
+            document.getElementById('view-cat').innerText = c.cat;
+            document.getElementById('view-desc').innerText = c.desc;
+        }
+        document.getElementById('card-modal').style.display = 'flex';
+    }
+    function saveCardData() {
+        const title = document.getElementById('edit-title').value;
+        const cat = document.getElementById('edit-cat').value;
+        const desc = document.getElementById('edit-desc').value;
+        if(!title) return;
+        if(editingId) {
+            const i = cards.findIndex(c => c.id === editingId);
+            cards[i] = { ...cards[i], title, cat, desc };
+        } else {
+            cards.push({ id: Date.now(), title, cat, desc });
+        }
+        localStorage.setItem('cards_516_full', JSON.stringify(cards));
+        closeModal(); renderCards();
+    }
+    function resetStats() { if(confirm("確定清除全場票數？")) db.ref('stats').remove(); }
+    function filterCat(c) {
+        currentCat = c;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.innerText === c));
+        renderCards();
+    }
+    function closeModal() { document.getElementById('card-modal').style.display = 'none'; }
+    function openAddModal() { editingId = null; openCard(); } // 此處簡化處理
+    function exportData() {
+        const blob = new Blob([JSON.stringify(cards, null, 2)], {type: 'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "cards.json"; a.click();
+    }
+</script>
+</body>
+</html>
